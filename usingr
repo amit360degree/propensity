@@ -1,0 +1,227 @@
+##libraries
+install.packages("data.table")
+install.packages("dpylr")
+library("data.table")
+library(dplyr)
+
+##importing data
+
+hit_data<-fread("F:\\fnp\\git upload\\fnpindstg_2018-11-14\\hit_data.tsv")
+
+event<-fread("F:\\fnp\\git upload\\fnpindstg_2018-11-14\\event.tsv")
+
+View(event)
+View(hit_data)
+
+
+hit_data$visitor_id<-paste0(hit_data$V1,hit_data$V2,hit_data$V3)
+
+
+##Providing readable names
+setnames(hit_data,old=c("V4","V5","V6","V7","V8","V9","V10","V11","V12","V13","V14"), new=c("visit_num","visit_page_num","post_event_list",	"hit_time_gmt","geo_region" ,"mobile_id",	"post_pagename",	"purchaseid",	"va_closer_detail",	"va_closer_id","geo_city"))
+
+
+
+
+
+
+
+f_daydata_final<- hit_data %>%
+  group_by(visitor_id) %>%
+  
+  summarize(
+    hit_count = n(),
+    visits=(max(visit_num)-min(visit_num))+1,
+    total_pages=last(visit_page_num),
+    time_spend=max(hit_time_gmt)-min(hit_time_gmt),
+    last_touch_point=last(va_closer_id),
+    entry_page=first(post_pagename),
+    second_entry_page=nth(post_pagename,2),
+    exit_page=last(post_pagename),
+    second_exit_page=nth(post_pagename,-2),
+    geo_city=first(geo_city),
+    mobile_id=first(mobile_id)
+    
+  )
+
+
+View(f_daydata_final)
+
+
+
+
+
+##Replacing entry page with second entry page where first entry page is empty
+f_daydata_final$actual_entrypage<-ifelse(f_daydata_final$entry_page=="",f_daydata_final$second_entry_page,
+                                         f_daydata_final$entry_page)
+
+
+
+##Replacing exit page with second exit page where first exit page is empty
+
+
+f_daydata_final$actual_exitpage<-ifelse(f_daydata_final$exit_page=="",f_daydata_final$second_exit_page,
+                                        f_daydata_final$exit_page)
+
+##Changing entry and exit pagenames
+install.packages("stringr")
+library(stringr)
+f_daydata_final$entry_pagename <- str_extract(f_daydata_final$actual_entrypage, "plp|pdp|home|checkout|control|account")
+
+f_daydata_final$exit_pagename<- str_extract(f_daydata_final$actual_exitpage, "plp|pdp|home|checkout|control|account")
+
+View(f_daydata_final)
+
+
+
+##Removing missing values from entry and exit pagename
+s4<-filter(f_daydata_final, is.na(entry_pagename) | is.na(exit_pagename))
+View(s4)
+s5<-f_daydata_final
+finalData<-subset(s5,!(is.na(s5["entry_pagename"]) | is.na(s5["exit_pagename"])))
+View(finalData)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##Gettng Reports##
+install.packages("RSiteCatalyst")
+library("RSiteCatalyst")
+
+
+SCAuth("deepak.jha@fnp.com:fnp","a926075600bb8e8eb51da6eea3ecfccf")
+
+rs <- GetReportSuites()
+
+
+evars <- GetEvars("fnpindstg")				
+View(evars)
+
+
+events <- GetSuccessEvents("fnpindstg")				
+props <- GetProps("fnpindstg")				
+
+
+
+getwd()
+setwd("F:\\fnp\\git upload\\git upload")
+write.csv(events,"events.csv")
+
+
+
+
+
+
+
+
+
+
+##New Data##
+
+new_data<-fread("F:\\fnp\\git upload\\files\\hit_data.tsv")
+event<-fread("F:\\fnp\\git upload\\files\\event.tsv")
+
+View(new_data)
+View(event)
+
+
+a<-table(new_data$V15)
+View(a)
+
+new_data$visitor_id<-paste0(new_data$V1,new_data$V2,new_data$V3)
+
+
+setnames(new_data,old=c("V4","V5","V6","V7","V8","V9","V10","V11","V12","V13","V14","V15","V16"), new=c("visit_num","visit_page_num","post_event_list",	"hit_time_gmt","geo_region" ,"mobile_id",	"post_pagename",	"purchaseid",	"va_closer_detail",	"va_closer_id","geo_city","post_prop1"	,"cust_hit_time_gmt"
+))
+
+
+
+
+new_data2<- new_data %>%
+  group_by(visitor_id) %>%
+  
+  summarize(
+    hit_count = n(),
+    visits=(max(visit_num)-min(visit_num))+1,
+    total_pages=last(visit_page_num),
+    time_spend=max(hit_time_gmt)-min(hit_time_gmt),
+    last_touch_point=last(va_closer_id),
+    entry_page=first(post_pagename),
+    second_entry_page=nth(post_pagename,2),
+    exit_page=last(post_pagename),
+    second_exit_page=nth(post_pagename,-2),
+    geo_city=first(geo_city),
+    mobile_id=first(mobile_id),
+    server=first(post_prop1)
+      )
+
+View(new_data2)
+
+
+a<-table(new_data2$server)
+View(a)
+
+
+b<-table(new_data$post_prop1)
+View(b)
+
+
+
+
+final_data <- filter(new_data,post_prop1=="m.fnp.com" | post_prop1=="www.fnp.com" | post_prop1=="")
+c<-table(final_data$post_prop1)
+View(c)
+View(final_data)
+
+getwd()
+setwd("F:\\fnp\\git upload\\files")
+write.csv(final_data,"final_data.csv")
