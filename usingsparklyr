@@ -1,0 +1,235 @@
+install.packages("sparklyr")
+install.packages("dplyr")
+
+
+
+library(sparklyr)
+library(dplyr)
+
+
+
+##Connecting sparkly
+##sc = spark_connect(master="local", version="2.1.0")
+##data_feed_local = spark_read_csv(sc = sc,
+    ##                             name = "data_feed",
+      ##                           path = "F:\\fnp\\git upload\\fnpindstg_2018-11-14\\hit_data.tsv",
+        ##                         header = FALSE,
+ 
+##Renaming variables
+##data_feed_tbl = data_feed_local %>%
+  mutate(merged_visitor_ids = paste0(V1,V2,V3)) %>%
+  ##select(
+    #3visitor_id = merged_visitor_ids,
+    ##visit_num = V4,
+    #visit_page_num = V5,
+    #post_event_list = V6,
+    #hit_time_gmt = V7,
+    #geo_location=V8,
+    #mobile_id = V9,
+    #post_pagename = V10,
+    #purchseid=V11,
+    #va_closer_detail=V12,
+    #va_closer_id=V13,
+    #geo_city=V14
+  ##)
+
+
+##tbl_vars(data_feed_tbl)
+
+
+
+
+
+
+
+
+##Finding who order 
+event_to_count = "239"
+event_counts = data_feed_tbl %>%
+  group_by(visitor_id) %>%
+  filter(post_event_list %regexp% paste0(event_to_count)) %>%
+  mutate(true_counts = ifelse(
+    post_event_list %regexp% paste0(event_to_count,"="), 
+    as.numeric(regexp_extract(post_event_list, 
+                              paste0(".*",event_to_count,"=([0-9]+).*"))),
+    1)
+  ) %>%
+  summarize(
+    order_value = sum(true_counts)
+  )
+
+asa<-data.frame(collect(event_counts))
+View(asa)
+
+
+##Merging both dataframes
+
+order_data<-merge(x=finalData, 
+      y=asa,
+      by.x = "visitor_id",
+      by.y = "visitor_id",
+      all= T)
+
+View(order_data)
+
+
+
+##Creating a new response variable where user had buy any item
+
+order_data$response<-ifelse(is.na(order_data$order_value),0,1)
+
+
+
+##
+
+
+propensity_rollup = order_data %>%
+  mutate(
+    response_var = ifelse(response > 0, 1, 0)
+  ) %>% select(-response)
+
+
+
+
+
+
+
+# Select model sample size
+sample_size = 10000
+
+# sample of visitors for building model
+sample_visitors = propensity_rollup %>%
+  top_n(sample_size, wt=visitor_id) %>%
+  collect()
+
+# Throw out single hit visitors 
+clean_sample = sample_visitors %>%
+  filter(hit_count > 1) %>%
+  select(-visitor_id)
+
+
+
+
+# Train a propensity model
+prop_model = glm(response_var ~hit_count+visits+total_pages+time_spend+entry_pagename+exit_pagename, family=binomial(), 
+                 data=clean_sample)
+
+
+summary(prop_model)
+
+
+
+
+Concordance(prop_model)
+source("F:\\Linear & Logistic In R\\Linear & Logistic In R\\Concordance.R")
+install.packages("MASS")
+install.packages("car")
+install.packages("rms")
+library(MASS)
+library(car)
+library(rms)
+stepAIC(prop_model)
+
+
+fit2<-glm(formula = response_var ~ hit_count + visits + total_pages + 
+            entry_pagename + exit_pagename, family = binomial(), data = clean_sample)
+
+
+
+propensity_scores = round(100*predict(fit2, 
+                                      newdata=order_data, 
+                                      type="response"))
+
+test2<-cbind(order_data,propensity_scores)
+
+View(test2)
+
+View(propensity_scores)
+
+View(order_data)
+
+
+
+
+#################################################################################################
+
+
+
+##Connecting sparkly
+sc = spark_connect(master="local", version="2.1.0")
+
+data_feed_local = spark_read_csv(sc = sc,
+                                 name = "data_feed",
+                                 path = "F:\\fnp\\git upload\files\\final_data.csv",
+                                 header = FALSE,
+                                 delimiter = "\t")
+
+
+
+##Renaming variables
+data_feed_tbl = data_feed_local %>%
+  mutate(merged_visitor_ids = paste0(V1,V2,V3)) %>%
+  select(
+    visitor_id = merged_visitor_ids,
+    visit_num = V4,
+    visit_page_num = V5,
+    post_event_list = V6,
+    hit_time_gmt = V7,
+    geo_location=V8,
+    mobile_id = V9,
+    post_pagename = V10,
+    purchseid=V11,
+    va_closer_detail=V12,
+    va_closer_id=V13,
+    geo_city=V14,
+    post_prop1=V15,
+    cust_hit_time_gmt=V16
+    
+  )
+
+
+
+tbl_vars(data_feed_tbl)
+
+
+
+
+
+
+
+
+##Finding who order 
+event_to_count = "239"
+event_counts = data_feed_tbl %>%
+  group_by(visitor_id) %>%
+  filter(post_event_list %regexp% paste0(event_to_count)) %>%
+  mutate(true_counts = ifelse(
+    post_event_list %regexp% paste0(event_to_count,"="), 
+    as.numeric(regexp_extract(post_event_list, 
+                              paste0(".*",event_to_count,"=([0-9]+).*"))),
+    1)
+  ) %>%
+  summarize(
+    order_value = sum(true_counts)
+  )
+
+asa<-data.frame(collect(event_counts))
+View(asa)
+
+
+##Merging both dataframes
+
+order_data<-merge(x=finalData, 
+                  y=asa,
+                  by.x = "visitor_id",
+                  by.y = "visitor_id",
+                  all= T)
+
+View(order_data)
+
+
+
+
+
+
+
